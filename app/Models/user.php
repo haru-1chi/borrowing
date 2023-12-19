@@ -12,6 +12,10 @@ class user extends Model
     protected $fillable = ['name', 'gender', 'birthday', 'phone', 'email', 'times_of_borrow'];
     public function borrows()
     {
-        return $this->belongsTo(borrow::class, 'user_id', 'id');
+        return $this->hasMany(Borrow::class);
     }
+    // public function borrows()
+    // {
+    //     return $this->belongsTo(Borrow::class);
+    // }
 }

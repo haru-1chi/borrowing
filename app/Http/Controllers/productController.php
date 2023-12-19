@@ -1,24 +1,43 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use App\Models\product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+
 class productController extends Controller
 {
-    public function insert(Request $request) {
+    public function insert(Request $request)
+    {
         try {
-            product::create($request->all());
-            return response()->json(['message' => 'เพิ่มข้อมูลเรียบร้อยแล้ว']);
+            $validated_data = $request->validate([
+                'name' => 'required|max:50',
+                'description' => 'required',
+                'category' => 'required',
+                'add_stock' => 'required'
+            ]);
+            $now = now();
+            $product_data = array_merge($validated_data, [
+                'full_stock' => $validated_data['add_stock'],
+                'in_stock' => $validated_data['add_stock'],
+                'created_at' => $now,
+                'updated_at' => $now
+            ]);
+            unset($product_data['add_stock']);
+            DB::table('products')->insert($product_data);
+            // Product::create($request->all());//CamelUpper model ใส่ stock แค่ field เดียว, สถานะ = enum ยืมได้ รอซ่อม ของหมด ยังไม่เปิดให้ยืม(ถ้าสถานะ = ของหมด instock=0)
+            return response()->json(['success' => true, 'message' => 'Product insert successfully'], 201);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
         }
     }
 
-    public function delete($id) {
+    public function delete($id)
+    {
         try {
-            $product = product::findOrFail($id);
-            $product->delete();
+            $product = Product::findOrFail($id); //กรณีมีคนยืม แต่โดนลบ product DB จะพัง ใช้ where เท่านั้น
+            $product->delete(); //if-else สำหรับเช็คว่าลบได้มั้ย
 
             return response()->json(['message' => 'ลบข้อมูลเรียบร้อยแล้ว']);
         } catch (\Exception $e) {
@@ -26,56 +45,68 @@ class productController extends Controller
         }
     }
 
-    public function update(Request $request, $id) {
+    public function update(Request $request, $id)
+    {
         try {
-            $product = product::findOrFail($id);
-            $product->update($request->all());
-
-            return response()->json(['message' => 'อัพเดตข้อมูลเรียบร้อยแล้ว']);
+            $validated_data = $request->validate([
+                'name' => 'sometimes|required|max:50',
+                'description' => 'sometimes|required',
+                'category' => 'sometimes|required',
+                'full_stock' => 'sometimes|required',
+                'in_stock' => 'sometimes|required'
+            ]);
+            $product = Product::where('id', $id)->first();
+            if ($product) {
+                $product->update($validated_data);
+                return response()->json(['success' => true, 'message' => 'Product updated successfully'], 201);
+            } else {
+                return response()->json(['success' => false, 'error' => 'Product not found'], 404);
+            }
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
 
-    public function getList(Request $request) {
+    public function getList(Request $request)
+    {
         try {
-            
-            $query = product::query();
+            //category มีแยกได้ และมี category_id ช่วยให้เปนระเบียบได้
+            $query = Product::query();
             $filters = $request->only(['category', 'status']);
             foreach ($filters as $key => $value) {
                 if ($value) {
-
-                    $query->where($key, $value);
+                    $query->where($key, $value); //สำหรับข้อมูลเป๊ะเท่านั้น อาจมี filter แบบซับซ้อน
                 }
             }
             $product_data = $query->get();
-            $records = $product_data->map(function ($product){
+            $records = $product_data->map(function ($product) {
                 return [
                     'id' => $product->id,
-                    'ชื่อสิ่งของ' => $product->name,
-                    'คำอธิบาย' => $product->description,
-                    'จำนวนคงเหลือ' => $product->in_stock,
-                    'สถานะ' => $product->status
+                    'name' => $product->name,
+                    'description' => $product->description,
+                    'in_stock' => $product->in_stock,
+                    'status' => $product->status
                 ];
             });
-            return response()->json(['รายการสิ่งของ' => $records]);
+            return response()->json(['List of Products' => $records]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-    public function getDetail($id) {
+    public function getDetail($id)
+    {
         try {
-            $product = product::findOrFail($id);
-            $record = [
+            $product = Product::findOrFail($id); //
+            $record = [ //
                 'id' => $product->id,
-                'ชื่อสิ่งของ' => $product->name,
-                'คำอธิบาย' => $product->description,
-                'ประเภท' => $product->category,
-                'จำนวนคงเหลือ' => $product->in_stock,
-                'จำนวนทั้งหมด' => $product->full_stock,
-                'สถานะ' => $product->status
+                'name' => $product->name,
+                'description' => $product->description,
+                'category' => $product->category,
+                'in_stock' => $product->in_stock,
+                'full_stock' => $product->full_stock,
+                'status' => $product->status
             ];
-            return response()->json(['รายละเอียดสิ่งของ' => $record]);
+            return response()->json(['Detail of Product' => $record]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }

@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use App\Models\product;
 use App\Models\borrow;
 use App\Models\user;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
 class borrowController extends Controller
@@ -13,33 +14,42 @@ class borrowController extends Controller
     public function borrow(Request $request)
     {
         try {
-            $borrowing = [
-                'user_id' => $request->input('user_id'),
-                'product_id' => $request->input('product_id'),
-                'borrow_days' => $request->input('borrow_days'),
-                'borrow_product_number' => $request->input('borrow_product_number')
-            ];
-            $user_exists = User::find($request->input('user_id'));
-
-            if (!$user_exists) {
-                throw new \Exception("ไม่สามารถทำการยืมได้, ไม่มี user_id {$request->input('user_id')} ในตาราง User");
-            }
-            $stock_update_result = $this->update_product_stock($request->input('product_id'), $request->input('borrow_product_number'));
-
+            $validated_data = $request->validate([
+                'user_id' => 'required|exists:users,id',
+                'product_id' => 'required|exists:products,id',
+                'borrow_days' => 'required|max:14',
+                'borrow_product_number' => 'required'
+            ]);
+            // $borrowing = [
+            //     'user_id' => $request->input('user_id'),
+            //     'product_id' => $request->input('product_id'),
+            //     'borrow_days' => $request->input('borrow_days'),
+            //     'borrow_product_number' => $request->input('borrow_product_number')
+            // ];
+            // $user_exists = User::find($request->input('user_id'));
+            // if (!$user_exists) {
+            //     throw new \Exception("Unable to borrow, user_id {$request->input('user_id')} not found in the User table."); //ห้าม handle 500
+            // }
+            $stock_update_result = $this->update_product_stock($validated_data['product_id'], $validated_data['borrow_product_number']);
             if ($stock_update_result['success']) {
-                $this->update_user_borrow_count($request->input('user_id'));
-                Borrow::create($borrowing);
+                $this->update_user_borrow_count($validated_data['user_id']);
+                $now = now();
+                $borrow_data = array_merge($validated_data, [
+                    'created_at' => $now,
+                    'updated_at' => $now
+                ]);
+                DB::table('borrows')->insert($borrow_data);
                 return response()->json([
                     'message' => $stock_update_result['message'],
-                    'remaining_stock' => $stock_update_result['จำนวนคงเหลือ'],
-                    'all_stock' => $stock_update_result['จำนวนทั้งหมด']
+                    'remaining_stock' => $stock_update_result['remaining_stock'],
+                    'all_stock' => $stock_update_result['all_stock']
                 ]);
             } else {
-                return response()->json(['error' => $stock_update_result['message']], 400);
+                return response()->json(['success' => false, 'error' => $stock_update_result['message']], 400);
             }
 
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
         }
     }
 
@@ -47,16 +57,15 @@ class borrowController extends Controller
     {
         try {
             $borrow = Borrow::findOrFail($id);
-
             $returnResult = $this->process_return($borrow);
-
             if ($returnResult['success']) {
-                return response()->json(['message' => $returnResult['message']]);
+                $borrow->update(['return_date' => now()]);
+                return response()->json(['success' => true, 'message' => $returnResult['message']]);
             } else {
-                return response()->json(['error' => $returnResult['message']], 400);
+                return response()->json(['success' => false, 'error' => $returnResult['message']], 400);
             }
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
     public function delete($id)
@@ -65,90 +74,110 @@ class borrowController extends Controller
             $borrow = borrow::findOrFail($id);
             $borrow->delete();
 
-            return response()->json(['message' => 'ลบรายการยืมเรียบร้อยแล้ว']);
+            return response()->json(['success' => true, 'message' => 'Data deleted successfully']);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
 
-    public function update(Request $request, $id) {
+    public function update(Request $request, $id)
+    {
         try {
             $borrow = borrow::findOrFail($id);
-            $borrow->update($request->all());
-
-            return response()->json(['message' => 'อัพเดตรายการยืมเรียบร้อยแล้ว']);
+            $borrow->update($request->all()); //สำหรับเพิ่มวันยืมเท่านั้น
+            return response()->json(['success' => true, 'message' => 'Data updated successfully']);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
     public function getList(Request $request)
     {
-        try {
+        try { //รายวัน กำลังยืม คืนแล้ว ดูว่าใครยืม item นี้ไป //ใช้ with whereHas where like //มี data ที่ query ออกมาด้วย
+            // $query = Borrow::query(); 
+            // $query->join('users', 'borrows.user_id', '=', 'users.id')
+            //     ->join('products', 'borrows.product_id', '=', 'products.id') 
+            //     ->select('borrows.*', 'users.name as user_name', 'products.name as product_name');
+            // $filters = $request->only(['borrow_status', 'user_id', 'category', 'product_name']); 
+            // foreach ($filters as $key => $value) {
+            //     if ($value) {
+            //         $query->where($key, $value);
+            //     }
+            // }
+            // $borrow_data = $query->get();
             $query = Borrow::query();
-            $query->join('users', 'borrows.user_id', '=', 'users.id')
-                ->join('products', 'borrows.product_id', '=', 'products.id')
-                ->select('borrows.*', 'users.name as user_name', 'products.name as product_name');
-            $filters = $request->only(['borrow_status', 'user_id', 'category', 'products.name as product_name']);
+            $filters = $request->only(['borrow_status', 'user_id', 'product_id', 'category', 'user_name', 'product_name']);
+
             foreach ($filters as $key => $value) {
-                if ($value) {
-                    $query->where($key, $value);
+                if ($value && !in_array($key, ['product_name', 'category', 'user_name'])) {
+                    $query->where($key, 'like', "%$value%");
+                }
+                if ($value && in_array($key, ['user_name', 'product_name', 'category'])) {
+                    $relation = ($key === 'user_name') ? 'users' : 'products';
+                    $query->whereHas($relation, function ($relationQuery) use ($key, $value) {
+                        if ($key === 'category') {
+                            $relationQuery->where($key, 'like', "%$value%");
+                        } else {
+                            $relationQuery->where('name', 'like', "%$value%");
+                        }
+                    });
                 }
             }
-            $borrow_data = $query->get();
-
+            $borrow_data = $query->with(['users', 'products'])->get();
             $records = $borrow_data->map(function ($borrow) {
                 return [
                     'id' => $borrow->id,
-                    'ชื่อ' => $borrow->user_name,
-                    'ชื่อสิ่งของ' => $borrow->product_name,
-                    'จำนวน' => $borrow->borrow_product_number,
-                    'สถานะการยืม' => $borrow->borrow_status
+                    'user_name' => optional($borrow->users)->name,
+                    'product_name' => optional($borrow->products)->name,
+                    'borrow_product_number' => $borrow->borrow_product_number,
+                    'borrow_status' => $borrow->borrow_status
                 ];
             });
-
-            return response()->json(['รายการยืมทั้งหมด' => $records]);
+            return response()->json(['List of borrows' => $records]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
     public function getDetail($id)
     {
         try {
-            $borrow = Borrow::query()
-                ->join('users', 'borrows.user_id', '=', 'users.id')
-                ->join('products', 'borrows.product_id', '=', 'products.id')
-                ->select('borrows.*', 'users.name as user_name', 'products.name as product_name')
-                ->findOrFail($id);
+            // $borrow = Borrow::query();
+            //     ->join('users', 'borrows.user_id', '=', 'users.id')
+            //     ->join('products', 'borrows.product_id', '=', 'products.id')
+            //     ->select('borrows.*', 'users.name as user_name', 'products.name as product_name')
+            //     ->findOrFail($id);
+            $query = Borrow::query();
+            $borrow = $query->with(['users', 'products'])->find($id);
             $note = '';
             $created_at_date = Carbon::parse($borrow->created_at)->toDateString();
-            $updated_date = Carbon::parse($borrow->updated_at)->toDateString();
-            $return_day = Carbon::parse($borrow->created_at)->addDays($borrow->borrow_days)->toDateString();
-            $days_late = $this->is_return_late($return_day, $updated_date);
+            $return_date = Carbon::parse($borrow->return_date)->toDateString();
+            $must_return_day = Carbon::parse($borrow->created_at)->addDays($borrow->borrow_days)->toDateString();
+            $days_late = $this->is_return_late($must_return_day, $return_date); //ห้ามยุ่งกับ column updated_at ให้สร้างมาใหม่
             if ($days_late > 0) {
                 $note = "เลยกำหนด {$days_late} วัน";
             }
-            $days_late = $this->is_borrow_late($return_day, $borrow);
+            $this->is_borrow_late($must_return_day, $borrow); //สำหรับอัพเดตยืมเลยกำหนด
 
             $record = [
                 'id' => $borrow->id,
-                'ชื่อ' => $borrow->user_name,
-                'ชื่อสิ่งของ' => $borrow->product_name,
-                'จำนวน' => $borrow->borrow_product_number,
-                'วันที่ยืม' => $created_at_date,
-                'วันที่ต้องคืน' => $return_day,
-                'สถานะการคืน' => $borrow->borrow_status,
-                'วันที่คืน' => $updated_date,
-                'หมายเหตุ' => $note
+                'user_name' => optional($borrow->users)->name,
+                'product_name' => optional($borrow->products)->name,
+                'borrow_product_number' => $borrow->borrow_product_number,
+                'created_at_date' => $created_at_date,
+                'must_return_day' => $must_return_day,
+                'borrow_status' => $borrow->borrow_status, //is_borrow_late
+                'return_date' => $return_date, //วันที่คืนจริงๆ
+                'note' => $note
             ];
-            return response()->json(['รายละเอียดการยืม' => $record]);
+            return response()->json(['Detail of Borrow' => $record]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
-    public function getHistory(Request $request)
+    public function getHistory(Request $request) //แยกเปน history ของ user product
     {
         try {
-            $query = Borrow::query()
+            //สำหรับฝั่ง user กับ admin ของชิ้นนี้ใครยืมไป ยืมกี่วัน แยกกันและต่างกัน (admin ดู history ของอะไร เช่น user product มีอะไร ถูกใครยืมไปบ้าง ล่าสุดใครยืม)
+            $query = Borrow::query() //ใช้ groupBy
                 ->join('users', 'borrows.user_id', '=', 'users.id')
                 ->join('products', 'borrows.product_id', '=', 'products.id')
                 ->select('borrows.*', 'users.name as user_name', 'products.name as product_name');
@@ -168,17 +197,17 @@ class borrowController extends Controller
                 $note = '';
                 if ($borrow->borrow_status === 'คืนแล้ว') {
                     $return_day = Carbon::parse($borrow->created_at)->addDays($borrow->borrow_days)->toDateString();
-                    $days_late = $this->isReturnLate($return_day, $action_date);
+                    $days_late = $this->is_return_late($return_day, $action_date);
                     if ($days_late > 0) {
                         $note = "เลยกำหนด {$days_late} วัน";
                     }
                     $records[] = [
                         'id' => $borrow->id,
-                        'ชื่อ' => $borrow->user_name,
-                        'ชื่อสิ่งของ' => $borrow->product_name,
-                        'จำนวน' => $borrow->borrow_product_number,
-                        'จำนวนวันยืม' => $borrow->borrow_days,
-                        'สถานะ' => 'ทำการยืม',
+                        'user_name' => $borrow->user_name,
+                        'product_name' => $borrow->product_name,
+                        'borrow_product_number' => $borrow->borrow_product_number,
+                        'borrow_days' => $borrow->borrow_days,
+                        'borrow_status' => 'ทำการยืม',
                         'วันที่ทำรายการ' => Carbon::parse($borrow->created_at)->toDateString(),
                         'หมายเหตุ' => '',
                     ];
@@ -216,31 +245,47 @@ class borrowController extends Controller
     public function dashboard(Request $request)
     {
         try {
+            // $query = Borrow::query();
+            // $query->join('users', 'borrows.user_id', '=', 'users.id')
+            //     ->join('products', 'borrows.product_id', '=', 'products.id')
+            //     ->select('borrows.*', 'users.name as user_name', 'products.name as product_name');
+            // $filters = $request->only(['borrow_status', 'user_id', 'category', 'product_id', 'gender']);
+            // foreach ($filters as $key => $value) {
+            //     if ($value) {
+            //         $query->where($key, $value); //ใช้ where like สำหรับ products.name as product_name
+            //     }
+            // }
+            // $borrow_data = $query->get();
             $query = Borrow::query();
-            $query->join('users', 'borrows.user_id', '=', 'users.id')
-                ->join('products', 'borrows.product_id', '=', 'products.id')
-                ->select('borrows.*', 'users.name as user_name', 'products.name as product_name');
-            $filters = $request->only(['borrow_status', 'user_id', 'category', 'product_id','gender']);
+            $filters = $request->only(['borrow_status', 'user_id', 'product_id', 'category', 'gender']);
             foreach ($filters as $key => $value) {
-                if ($value) {
-                    $query->where($key, $value);
+                if ($value && !in_array($key, ['category', 'gender'])) {
+                    $query->where($key, 'like', "%$value%");
+                }
+                if ($value && in_array($key, ['gender', 'category'])) {
+                    $relation = ($key === 'gender') ? 'users' : 'products';
+                    $query->whereHas($relation, function ($relationQuery) use ($key, $value) {
+                        $relationQuery->where($key, 'like', "%$value%");
+                    });
                 }
             }
-            $borrow_data = $query->get();
+
+            $borrow_data = $query->with(['users', 'products'])->get();
             $total_borrows = $borrow_data->count();
             $total_returns = $borrow_data->where('borrow_status', 'คืนแล้ว')->count();
-            $borrow_status_counts = $borrow_data->groupBy('borrow_status')->map->count();
+            $borrow_status_counts = $borrow_data->groupBy('borrow_status')->map->count(); //pluck แทน groupBy
+            // dd($borrow_status_counts);
             $dashboardData = [
-                'จำนวนการยืมทั้งหมด' => $total_borrows,
-                'จำนวนการยืมที่คืนแล้ว' => $total_returns,
-                'จำนวนสถานะแต่ละรายการ' => $borrow_status_counts,
-                'รายการยืมทั้งหมด' => $borrow_data->map(function ($borrow) {
+                'total_borrows' => $total_borrows,
+                'total_returns' => $total_returns,
+                'borrow_status_counts' => $borrow_status_counts,
+                'all_borrowing' => $borrow_data->map(function ($borrow) {
                     return [
                         'id' => $borrow->id,
-                        'ชื่อ' => $borrow->user_name,
-                        'ชื่อสิ่งของ' => $borrow->product_name,
-                        'จำนวน' => $borrow->borrow_product_number,
-                        'สถานะ' => $borrow->borrow_status,
+                        'user_name' => optional($borrow->users)->name,
+                        'product_name' => optional($borrow->products)->name,
+                        'borrow_product_number' => $borrow->borrow_product_number,
+                        'borrow_status' => $borrow->borrow_status,
                     ];
                 }),
             ];
@@ -252,22 +297,20 @@ class borrowController extends Controller
 
     private function update_user_borrow_count($user_id)
     {
-        if (!$user_id) {
-            return ['success' => false, 'message' => 'ไม่มี user_id นี้'];
-        } else {
-            User::where('id', $user_id)->increment('times_of_borrow');
-        }
-
+        User::where('id', $user_id)->increment('times_of_borrow');
+        // if (!$user_id) {
+        //     return ['success' => false, 'message' => 'ไม่มี user_id นี้'];
+        // } else {
+        // }
     }
 
     private function update_product_stock($product_id, $borrow_product_number)
     {
         try {
             $product = Product::find($product_id);
-
-            if (!$product) {
-                return ['success' => false, 'message' => 'ไม่มี product_id นี้'];
-            }
+            // if (!$product) {
+            //     return ['success' => false, 'message' => 'ไม่มี product_id นี้'];
+            // }
             if ($product->in_stock > 0) {
                 $remaining_stock = $product->in_stock - $borrow_product_number;
                 if ($remaining_stock === 0) {
@@ -276,17 +319,21 @@ class borrowController extends Controller
                     return [
                         'success' => true,
                         'message' => "ทำการยืมเรียบร้อยแล้ว ตอนนี้ของหมดสต๊อกแล้ว",
-                        'จำนวนคงเหลือ' => $remaining_stock,
-                        'จำนวนทั้งหมด' => $product->full_stock
+                        'remaining_stock' => $remaining_stock,
+                        'all_stock' => $product->full_stock
                     ];
                 } elseif ($remaining_stock < 0) {
-                    return ['success' => false, 'message' => 'ยืมเกินจำนวนที่มี', 'จำนวนคงเหลือ' => $remaining_stock];
+                    return [
+                        'success' => false,
+                        'message' => 'ยืมเกินจำนวนที่มี',
+                        'remaining_stock' => $remaining_stock];
                 } else {
                     $product->decrement('in_stock', $borrow_product_number);
-                    return ['success' => true,
+                    return [
+                        'success' => true,
                         'message' => "ทำการยืมเรียบร้อยแล้ว ",
-                        'จำนวนคงเหลือ' => $remaining_stock,
-                        'จำนวนทั้งหมด' => $product->full_stock
+                        'remaining_stock' => $remaining_stock,
+                        'all_stock' => $product->full_stock
                     ];
                 }
             } else {
@@ -300,12 +347,12 @@ class borrowController extends Controller
     private function process_return(Borrow $borrow)
     {
         try {
-            if ($borrow->borrow_status === 'กำลังยืม') {
-                $borrow->update(['borrow_status' => 'คืนแล้ว']);
+            if ($borrow->borrow_status !== 'คืนแล้ว') {
+                $borrow->update(['borrow_status' => 'คืนแล้ว', 'return_date' => now()]);
                 $productId = $borrow->product_id;
-                $product = Product::find($productId);
+                $product = Product::find($productId); //ไม่ต้อง find อีกรอบ เพิ่มตาม relation ได้เลย
                 if ($product) {
-                    $product->increment('in_stock', $borrow->borrow_product_number);
+                    $product->increment('in_stock', $borrow->borrow_product_number); //ใส่ success ทั้งหมด
                     $product->update(['status' => true]);
                     return ['success' => true, 'message' => 'ทำการคืนเรียบร้อยแล้ว'];
                 } else {
@@ -323,7 +370,7 @@ class borrowController extends Controller
     {
         $return_date = Carbon::parse($return_day)->startOfDay();
         $current_date = Carbon::now()->startOfDay();
-        if ($return_date->isAfter($current_date)) {
+        if ($current_date->isAfter($return_date)) {
             $days_late = $return_date->diffInDays($current_date);
             if ($borrow->borrow_status !== 'คืนแล้ว') {
                 $borrow->update(['borrow_status' => "เลยกำหนด {$days_late} วัน"]);

@@ -10,8 +10,12 @@ class product extends Model
     use HasFactory;
 
     protected $fillable = ['name', 'category', 'status', 'full_stock', 'in_stock', 'description'];
+    // public function Borrow()
+    // {
+    //     return $this->belongsTo(Borrow::class, 'product_id', 'id');
+    // }
     public function borrows()
     {
-        return $this->belongsTo(borrow::class, 'product_id', 'id');
+        return $this->hasMany(Borrow::class);
     }
 }

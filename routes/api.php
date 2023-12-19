@@ -22,20 +22,20 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::post('user/insert',[userController::class,'insert']);
 Route::post('user/update/{id}',[userController::class,'update']);
 Route::post('user/delete/{id}',[userController::class,'delete']);
-Route::post('user/getList',[userController::class,'getList']);
-Route::post('user/getDetail/{id}',[userController::class,'getDetail']);
+Route::get('user/getList',[userController::class,'getList']);
+Route::get('user/getDetail/{id}',[userController::class,'getDetail']);
 
 Route::post('product/insert',[productController::class,'insert']);
 Route::post('product/update/{id}',[productController::class,'update']);
 Route::post('product/delete/{id}',[productController::class,'delete']);
-Route::post('product/getList',[productController::class,'getList']);
-Route::post('product/getDetail/{id}',[productController::class,'getDetail']);
+Route::get('product/getList',[productController::class,'getList']);
+Route::get('product/getDetail/{id}',[productController::class,'getDetail']);
 
 Route::post('borrow/borrow',[borrowController::class,'borrow']);
 Route::post('borrow/return/{id}',[borrowController::class,'return']);
 Route::post('borrow/update/{id}',[borrowController::class,'update']);
 Route::post('borrow/delete/{id}',[borrowController::class,'delete']);
-Route::post('borrow/getList',[borrowController::class,'getList']);
-Route::post('borrow/getDetail/{id}',[borrowController::class,'getDetail']);
-Route::post('borrow/getHistory',[borrowController::class,'getHistory']);
-Route::post('borrow/dashboard',[borrowController::class,'dashboard']);
+Route::get('borrow/getList',[borrowController::class,'getList']);
+Route::get('borrow/getDetail/{id}',[borrowController::class,'getDetail']);
+Route::get('borrow/getHistory',[borrowController::class,'getHistory']);
+Route::get('borrow/dashboard',[borrowController::class,'dashboard']);

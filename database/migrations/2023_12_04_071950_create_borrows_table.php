@@ -18,7 +18,8 @@ return new class extends Migration
             $table->integer('borrow_days')->nullable();
             $table->integer('borrow_product_number')->nullable();
             $table->string('borrow_status')->nullable()->default('กำลังยืม');
-            $table->timestamps();
+            $table->timestamp('return_date')->nullable();
+            $table->timestamps();//เพิ่มฟิลด์วันยืม วันทำการคืนได้เลย แยกจากที่สร้างแบบ auto
         });
     }
 
