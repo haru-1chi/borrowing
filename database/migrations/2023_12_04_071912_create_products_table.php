@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name')->nullable();
             $table->string('category')->nullable();
-            $table->boolean('status')->nullable()->default(true);
+            $table->boolean('status')->nullable()->default('ยืมได้');
             $table->integer('full_stock')->nullable();//ทำ stock อันเดียว จริงๆใช้สำหรับเก็บได้ ส่วน frontend ต้องเก็บ field เดียว
             $table->integer('in_stock')->nullable();
             $table->string('description')->nullable();
