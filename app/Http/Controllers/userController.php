@@ -7,7 +7,7 @@ use App\Models\borrow;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-
+use Illuminate\Support\Facades\Storage;
 class userController extends Controller
 {
     public function insert(Request $request)
@@ -28,6 +28,7 @@ class userController extends Controller
                 'birthday' => 'required',
                 'phone' => 'required',
                 'email' => 'required|email',
+                'picture' => 'sometimes|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
             ]);
             $now = now();
             $user_data = array_merge($validated_data, ['created_at' => $now, 'updated_at' => $now]);
@@ -73,10 +74,18 @@ class userController extends Controller
                 'birthday' => 'sometimes|required',
                 'phone' => 'sometimes|required',
                 'email' => 'sometimes|required|email',
+                'picture' => 'sometimes|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
             ]);
             $user = User::where('id', $id)->first();
             if ($user) {
                 $user->update($validated_data);
+                if ($request->hasFile('picture')) {
+                    if ($user->picture) {
+                        Storage::delete($user->picture);
+                    }
+                    $picturePath = $request->file('picture')->store('public/pictures');
+                    $user->update(['picture' => $picturePath]);
+                }
                 return response()->json(['success' => true, 'message' => 'User updated successfully'], 201);
             } else {
                 return response()->json(['success' => false, 'error' => 'User not found'], 404);
@@ -106,7 +115,8 @@ class userController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'gender' => $user->gender,
-                    'times_of_borrow' => $user->times_of_borrow
+                    'times_of_borrow' => $user->times_of_borrow,
+                    'picture' => $user->picture
                 ];
             });
             return response()->json(['success' => true, 'List of users' => $records], 200);
@@ -128,7 +138,8 @@ class userController extends Controller
                 'birthday' => $user->birthday,
                 'phone' => $user->phone,
                 'email' => $user->email,
-                'times_of_borrow' => $user->times_of_borrow
+                'times_of_borrow' => $user->times_of_borrow,
+                'picture' => $user->picture
             ];
             return response()->json(['success' => true, 'Detail of User' => $record], 200); //
         } catch (\Exception $e) {

@@ -106,7 +106,8 @@ class productController extends Controller
                     'name' => $product->name,
                     'category' => $product->category,
                     'in_stock' => $product->in_stock,
-                    'status' => $product->status
+                    'status' => $product->status,
+                    'picture' => $product->picture
                 ];
             });
             return response()->json(['success' => true, 'List of Products' => $records], 200);
