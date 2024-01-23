@@ -5,11 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 class product extends Model
 {
     use HasFactory;
     use SoftDeletes;
-    protected $fillable = ['name', 'category', 'status', 'full_stock', 'in_stock', 'description'];
+    protected $fillable = ['name', 'category', 'status', 'full_stock', 'in_stock', 'description', 'picture'];
     // public function Borrow()
     // {
     //     return $this->belongsTo(Borrow::class, 'product_id', 'id');
@@ -17,5 +18,11 @@ class product extends Model
     public function borrows()
     {
         return $this->hasMany(Borrow::class);
+    }
+
+    public function getPictureUrlAttribute()
+    {
+        $picturePath = $this->attributes['picture'];
+        return Storage::url($picturePath);
     }
 }

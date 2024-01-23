@@ -7,7 +7,7 @@ use App\Models\product;
 use App\Models\borrow;
 use App\Models\user;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Http\Request;
+use Illuminate\Http\Request; //นึกถึงตอน review code สรุป 3 sprint **challenge sprint 2 ***อันนี้ต้องโชว์ ตามไทม์ไลน์
 
 class borrowController extends Controller
 {
@@ -132,7 +132,7 @@ class borrowController extends Controller
             $filters = $request->only(['borrow_status', 'user_id', 'product_id', 'category', 'user_name', 'product_name', 'create_at']);
 
             foreach ($filters as $key => $value) {
-                if ($value && !in_array($key, ['product_name', 'category', 'user_name'])) {
+                if ($value && !in_array($key, ['product_name', 'category', 'user_name', 'create_at'])) {
                     $query->where($key, 'like', "%$value%");
                 }
                 if ($value && in_array($key, ['user_name', 'product_name', 'category'])) {
@@ -158,8 +158,10 @@ class borrowController extends Controller
                     'id' => $borrow->id,
                     'user_name' => optional($borrow->users)->name,
                     'product_name' => optional($borrow->products)->name,
+                    'category' => optional($borrow->products)->category,
                     'borrow_product_number' => $borrow->borrow_product_number,
-                    'borrow_status' => $borrow->borrow_status
+                    'borrow_status' => $borrow->borrow_status,
+                    'borrow_date' => Carbon::parse($borrow->created_at)->toDateString()
                 ];
             });
             return response()->json(['success' => true, 'List of borrows' => $records], 200);
@@ -353,9 +355,9 @@ class borrowController extends Controller
                 });
             }
 
-            return response()->json(['List of borrows' => $records->values()]);
+            return response()->json(['success' => true, 'List of borrows' => $records->values()]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
 
@@ -410,9 +412,9 @@ class borrowController extends Controller
                     ];
                 }),
             ];
-            return response()->json(['Dashboard Data' => $dashboardData]);
+            return response()->json(['success' => true, 'Dashboard Data' => $dashboardData]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
 
@@ -439,31 +441,31 @@ class borrowController extends Controller
                     $product->update(['status' => 'ของหมด']);
                     return [
                         'success' => true,
-                        'message' => "ทำการยืมเรียบร้อยแล้ว ตอนนี้ของหมดสต๊อกแล้ว",
+                        'message' => "The product was borrowed successfully. now, this product is out of stock.",
                         'remaining_stock' => $remaining_stock,
                         'all_stock' => $product->full_stock
                     ];
                 } elseif ($remaining_stock < 0) {
                     return [
                         'success' => false,
-                        'message' => 'ยืมเกินจำนวนที่มี',
+                        'message' => 'Do not borrow beyond the available range of product numbers in stock.',
                         'remaining_stock' => $remaining_stock];
                 } elseif ($product->status === 'ยังไม่เปิดให้ยืม') {
                     return [
                         'success' => false,
-                        'message' => 'ตอนนี้ยังไม่เปิดให้ยืม',
+                        'message' => 'This product is not available for borrowing now',
                         'remaining_stock' => $remaining_stock];
                 } else {
                     $product->decrement('in_stock', $borrow_product_number);
                     return [
                         'success' => true,
-                        'message' => "ทำการยืมเรียบร้อยแล้ว ",
+                        'message' => "The product was borrowed successfully ",
                         'remaining_stock' => $remaining_stock,
                         'all_stock' => $product->full_stock
                     ];
                 }
             } else {
-                return ['success' => false, 'message' => 'ไม่สามารถทำการยืมได้ ตอนนี้ของหมดสต๊อก'];
+                return ['success' => false, 'message' => 'cant borrow this product. now, this product is out of stock.'];
             }
         } catch (\Exception $e) {
             return ['success' => false, 'message' => $e->getMessage()];
@@ -481,9 +483,9 @@ class borrowController extends Controller
                 if ($borrow->products->status === 'ของหมด') {
                     $borrow->products()->update(['status' => 'ยืมได้']);
                 }
-                return ['success' => true, 'message' => 'ทำการคืนเรียบร้อยแล้ว'];
+                return ['success' => true, 'message' => 'product returned successfully'];
             } else {
-                return ['success' => false, 'message' => 'เลือกรายการยืมไม่ถูกต้อง'];
+                return ['success' => false, 'message' => 'borrow_id is not found'];
             }
         } catch (\Exception $e) {
             return ['success' => false, 'message' => $e->getMessage()];

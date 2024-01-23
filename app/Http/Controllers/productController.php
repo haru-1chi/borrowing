@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use App\Models\borrow;
 class productController extends Controller
 {
@@ -15,7 +16,8 @@ class productController extends Controller
                 'name' => 'required|max:50',
                 'description' => 'required',
                 'category' => 'required',
-                'add_stock' => 'required'
+                'add_stock' => 'required',
+                'picture' => 'sometimes|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
             ]);
             $now = now();
             $product_data = array_merge($validated_data, [
@@ -63,11 +65,20 @@ class productController extends Controller
                 'category' => 'sometimes|required',
                 'status' => 'sometimes|required',
                 'full_stock' => 'sometimes|required',
-                'in_stock' => 'sometimes|required'
+                'in_stock' => 'sometimes|required',
+                'picture' => 'sometimes|image|mimes:jpeg,png,jpg,gif,svg|max:2048'
             ]);
+
             $product = Product::where('id', $id)->first();
             if ($product) {
                 $product->update($validated_data);
+                if ($request->hasFile('picture')) {
+                    if ($product->picture) {
+                        Storage::delete($product->picture);
+                    }
+                    $picturePath = $request->file('picture')->store('public/pictures');
+                    $product->update(['picture' => $picturePath]);
+                }
                 return response()->json(['success' => true, 'message' => 'Product updated successfully'], 201);
             } else {
                 return response()->json(['success' => false, 'error' => 'Product not found'], 404);
@@ -83,7 +94,7 @@ class productController extends Controller
             //category มีแยกได้ และมี category_id ช่วยให้เปนระเบียบได้
             //สำหรับข้อมูลเป๊ะเท่านั้น อาจมี filter แบบซับซ้อน
             $query = Product::query();
-            $filters = $request->only(['name', 'category', 'status', 'full_stock', 'in_stock', 'description']);
+            $filters = $request->only(['name', 'category', 'status', 'in_stock']);
             foreach ($filters as $key => $value) {
                 $query->where($key, 'like', "%$value%");
             }
@@ -114,7 +125,8 @@ class productController extends Controller
                 'category' => $product->category,
                 'in_stock' => $product->in_stock,
                 'full_stock' => $product->full_stock,
-                'status' => $product->status
+                'status' => $product->status,
+                'picture' => $product->picture
             ];
             return response()->json(['success' => true, 'Detail of Product' => $record], 200);
         } catch (\Exception $e) {
