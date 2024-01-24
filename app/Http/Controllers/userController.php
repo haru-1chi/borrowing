@@ -10,7 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 class userController extends Controller
 {
-    public function insert(Request $request)
+    public function insert(Request $request)//ไม่น่าใช้แล้ว
     {
         try {
             //ชื่อโมเดล ควรเปน CamelUpper 'User', ชื่อ controller CamelUpper 'UserController', ตัวแปรเป็น snake แล้วแต่ request
@@ -41,7 +41,7 @@ class userController extends Controller
         }
     }
 
-    public function delete($id)
+    public function delete($id)//admin or user want to delete account
     {
         try {
 
@@ -68,6 +68,10 @@ class userController extends Controller
     public function update(Request $request, $id)
     {
         try {
+            $user = auth()->user();
+            if (!$user) {
+                return response()->json(['error' => 'user must to login before borrowing'], 401);
+            }
             $validated_data = $request->validate([
                 'name' => 'sometimes|required|max:50',
                 'gender' => 'sometimes|required',
@@ -125,7 +129,7 @@ class userController extends Controller
             return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
-    public function getDetail($id)
+    public function getDetail($id)//อาจสร้างอีก path สำหรับของ user
     {
         try {
             $user = User::find($id); //find = user only no relation, where = condition relation

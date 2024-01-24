@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use Carbon\Carbon;
-use App\Models\product;
-use App\Models\borrow;
-use App\Models\user;
+use App\Models\Product;
+use App\Models\Borrow;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request; //นึกถึงตอน review code สรุป 3 sprint **challenge sprint 2 ***อันนี้ต้องโชว์ ตามไทม์ไลน์
 
@@ -14,27 +14,21 @@ class borrowController extends Controller
     public function borrow(Request $request)
     {
         try {
+            $user = auth()->user();
+            if (!$user) {
+                return response()->json(['error' => 'user must to login before borrowing'], 401);
+            }
             $validated_data = $request->validate([
-                'user_id' => 'required|exists:users,id',
                 'product_id' => 'required|exists:products,id',
                 'borrow_days' => 'required|max:14',
                 'borrow_product_number' => 'required'
             ]);
-            // $borrowing = [
-            //     'user_id' => $request->input('user_id'),
-            //     'product_id' => $request->input('product_id'),
-            //     'borrow_days' => $request->input('borrow_days'),
-            //     'borrow_product_number' => $request->input('borrow_product_number')
-            // ];
-            // $user_exists = User::find($request->input('user_id'));
-            // if (!$user_exists) {
-            //     throw new \Exception("Unable to borrow, user_id {$request->input('user_id')} not found in the User table."); //ห้าม handle 500
-            // }
             $stock_update_result = $this->update_product_stock($validated_data['product_id'], $validated_data['borrow_product_number']);
             if ($stock_update_result['success']) {
-                $this->update_user_borrow_count($validated_data['user_id']);
+                $this->update_user_borrow_count($user['user_id']);
                 $now = now();
                 $borrow_data = array_merge($validated_data, [
+                    'user_id' => $user->id,
                     'created_at' => $now,
                     'updated_at' => $now
                 ]);
@@ -53,7 +47,7 @@ class borrowController extends Controller
         }
     }
 
-    public function return (Request $request, $id)
+    public function return (Request $request, $id)//admin
     {
         try {
             $borrow = Borrow::find($id);
@@ -68,12 +62,9 @@ class borrowController extends Controller
             return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
-    public function delete($id)
+    public function delete($id)//admin
     {
         try {
-            // $borrow = borrow::find($id);
-            // $borrow->delete();
-            // return response()->json(['success' => true, 'message' => 'Data deleted successfully']);
             $borrow = Borrow::withTrashed()->where('id', $id)->first();
             if ($borrow) {
                 if ($borrow->borrow_status !== 'คืนแล้ว') {
@@ -89,15 +80,8 @@ class borrowController extends Controller
         }
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, $id)//admin
     {
-        // try {
-        //     $borrow = borrow::findOrFail($id);
-        //     $borrow->update($request->all()); //สำหรับเพิ่มวันยืมเท่านั้น
-        //     return response()->json(['success' => true, 'message' => 'Data updated successfully']);
-        // } catch (\Exception $e) {
-        //     return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
-        // }
         try {
             $validated_data = $request->validate([
                 'borrow_days' => 'required|max:14'
@@ -114,7 +98,7 @@ class borrowController extends Controller
             return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
-    public function getList(Request $request)
+    public function getList(Request $request)//admin
     {
         try { //รายวัน กำลังยืม คืนแล้ว ดูว่าใครยืม item นี้ไป //ใช้ with whereHas where like //มี data ที่ query ออกมาด้วย
             // $query = Borrow::query(); 
@@ -148,11 +132,14 @@ class borrowController extends Controller
             }
             // $borrow_data = $query->with(['users', 'products'])->get();
             // $borrow_data = Borrow::withTrashed()->with(['users', 'products'])->get();
-            $borrow_data = $query->with(['users' => function ($query) {
-                $query->withTrashed();
-            }, 'products' => function ($query) {
-                $query->withTrashed();
-            }])->get();
+            $borrow_data = $query->with([
+                'users' => function ($query) {
+                    $query->withTrashed();
+                },
+                'products' => function ($query) {
+                    $query->withTrashed();
+                }
+            ])->get();
             $records = $borrow_data->map(function ($borrow) {
                 return [
                     'id' => $borrow->id,
@@ -169,7 +156,7 @@ class borrowController extends Controller
             return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
-    public function getDetail($id)
+    public function getDetail($id)//admin
     {
         try {
             // $borrow = Borrow::query();
@@ -179,11 +166,14 @@ class borrowController extends Controller
             //     ->findOrFail($id);
             $query = Borrow::withTrashed();
             // $borrow = $query->with(['users', 'products'])->find($id);
-            $borrow = $query->with(['users' => function ($query) {
-                $query->withTrashed();
-            }, 'products' => function ($query) {
-                $query->withTrashed();
-            }])->find($id);
+            $borrow = $query->with([
+                'users' => function ($query) {
+                    $query->withTrashed();
+                },
+                'products' => function ($query) {
+                    $query->withTrashed();
+                }
+            ])->find($id);
             $note = '';
             $created_at_date = Carbon::parse($borrow->created_at)->toDateString();
             $return_date = Carbon::parse($borrow->return_date)->toDateString();
@@ -210,7 +200,7 @@ class borrowController extends Controller
             return response()->json(['success' => false, 'error' => $e->getMessage()], 400);
         }
     }
-    public function getHistory(Request $request) //แยกเปน history ของ user product
+    public function getHistory(Request $request) //แยกเปน history ของ user/admin product
     {
         try {
             //สำหรับฝั่ง user กับ admin ของชิ้นนี้ใครยืมไป ยืมกี่วัน แยกกันและต่างกัน (admin ดู history ของอะไร เช่น user product มีอะไร ถูกใครยืมไปบ้าง ล่าสุดใครยืม)
@@ -291,11 +281,14 @@ class borrowController extends Controller
             // }
             $filters = $request->only(['user_id', 'product_id']);
             $query = Borrow::withTrashed()
-                ->with(['users' => function ($query) {
-                    $query->withTrashed();
-                }, 'products' => function ($query) {
-                    $query->withTrashed();
-                }]);
+                ->with([
+                    'users' => function ($query) {
+                        $query->withTrashed();
+                    },
+                    'products' => function ($query) {
+                        $query->withTrashed();
+                    }
+                ]);
 
             foreach ($filters as $key => $value) {
                 if ($value) {
@@ -361,7 +354,7 @@ class borrowController extends Controller
         }
     }
 
-    public function dashboard(Request $request)
+    public function dashboard(Request $request)//admin
     {
         try {
             // $query = Borrow::query();
@@ -389,11 +382,14 @@ class borrowController extends Controller
                 }
             }
             // $borrow_data = $query->with(['users', 'products'])->get();
-            $borrow_data = $query->with(['users' => function ($query) {
-                $query->withTrashed();
-            }, 'products' => function ($query) {
-                $query->withTrashed();
-            }])->get();
+            $borrow_data = $query->with([
+                'users' => function ($query) {
+                    $query->withTrashed();
+                },
+                'products' => function ($query) {
+                    $query->withTrashed();
+                }
+            ])->get();
             $total_borrows = $borrow_data->count();
             $total_returns = $borrow_data->where('borrow_status', 'คืนแล้ว')->count();
             $borrow_status_counts = $borrow_data->groupBy('borrow_status')->map->count(); //pluck แทน groupBy
@@ -449,12 +445,14 @@ class borrowController extends Controller
                     return [
                         'success' => false,
                         'message' => 'Do not borrow beyond the available range of product numbers in stock.',
-                        'remaining_stock' => $remaining_stock];
+                        'remaining_stock' => $remaining_stock
+                    ];
                 } elseif ($product->status === 'ยังไม่เปิดให้ยืม') {
                     return [
                         'success' => false,
                         'message' => 'This product is not available for borrowing now',
-                        'remaining_stock' => $remaining_stock];
+                        'remaining_stock' => $remaining_stock
+                    ];
                 } else {
                     $product->decrement('in_stock', $borrow_product_number);
                     return [

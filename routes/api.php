@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\userController;
 use App\Http\Controllers\productController;
 use App\Http\Controllers\borrowController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Auth\ForgotPasswordController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -39,3 +41,17 @@ Route::get('borrow/getList',[borrowController::class,'getList']);
 Route::get('borrow/getDetail/{id}',[borrowController::class,'getDetail']);
 Route::get('borrow/getHistory',[borrowController::class,'getHistory']);
 Route::get('borrow/dashboard',[borrowController::class,'dashboard']);
+
+Route::group([
+    'prefix' => 'auth',
+    'middleware' => 'api',
+], function () {
+    Route::post('register', [AuthController::class, 'register']);
+    Route::post('login', [AuthController::class, 'login']);
+    Route::post('logout', [AuthController::class, 'logout']);
+    Route::post('refresh', [AuthController::class, 'refresh']);
+    Route::post('resetPassword', [AuthController::class, 'resetPassword']);
+    Route::post('password/forgot', [ForgotPasswordController::class, 'sendResetLinkEmail'])->name('password.forgot');;
+    Route::post('password/reset', [ForgotPasswordController::class, 'reset'])->name('password.reset');;
+    Route::get('me', [AuthController::class, 'me']);
+});
