@@ -10,7 +10,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Tymon\JWTAuth\Contracts\JWTSubject;
-
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Config;
 class User extends Authenticatable implements JWTSubject
 {
     use HasFactory, SoftDeletes, Notifiable, HasApiTokens;
@@ -19,7 +20,7 @@ class User extends Authenticatable implements JWTSubject
      *
      * @var array<int, string>
      */
-    protected $fillable = ['name', 'gender', 'birthday', 'phone', 'email','password', 'times_of_borrow', 'picture'];
+    protected $fillable = ['name', 'gender', 'birthday', 'phone', 'email', 'password', 'times_of_borrow', 'picture', 'role'];
     /**
      * The attributes that should be hidden for serialization.
      *
@@ -29,7 +30,7 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'remember_token',
     ];
-    
+
     /**
      * The attributes that should be cast.
      *
@@ -39,7 +40,7 @@ class User extends Authenticatable implements JWTSubject
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
-    
+
     /**
      * Get the identifier that will be stored in the subject claim of the JWT.
      *
@@ -67,6 +68,14 @@ class User extends Authenticatable implements JWTSubject
     public function getPictureUrlAttribute()
     {
         $picturePath = $this->attributes['picture'];
-        return Storage::url($picturePath);
+        $appUrl = Config::get('app.url');
+        return $appUrl . Storage::url($picturePath);
+    }
+
+    const ADMIN_TYPE = 1;
+    const DEFAULT_TYPE = 0;
+    public function isAdmin()
+    {
+        return $this->type === self::ADMIN_TYPE;
     }
 }

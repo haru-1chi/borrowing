@@ -7,12 +7,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Models\borrow;
+
 class productController extends Controller
 {
     public function insert(Request $request)
     {
         try {
-            $validated_data = $request->validate([
+            $validated_data = $request->validate([ //ไปเพิ่ม insert ให้รอบคอบ
                 'name' => 'required|max:50',
                 'description' => 'required',
                 'category' => 'required',
@@ -27,7 +28,12 @@ class productController extends Controller
                 'updated_at' => $now
             ]);
             unset($product_data['add_stock']);
-            DB::table('products')->insert($product_data);
+            $product = Product::create($validated_data);
+            if ($request->hasFile('picture')) {
+                $picturePath = $request->file('picture')->store('public/pictures');
+                $fullUrlPath = asset(Storage::url($picturePath));
+                $product->update(['picture' => $fullUrlPath]);
+            }
             // Product::create($request->all());//CamelUpper model ใส่ stock แค่ field เดียว, สถานะ = enum ยืมได้ รอซ่อม ของหมด ยังไม่เปิดให้ยืม(ถ้าสถานะ = ของหมด instock=0)
             return response()->json(['success' => true, 'message' => 'Product insert successfully'], 201);
         } catch (\Exception $e) {
@@ -77,7 +83,8 @@ class productController extends Controller
                         Storage::delete($product->picture);
                     }
                     $picturePath = $request->file('picture')->store('public/pictures');
-                    $product->update(['picture' => $picturePath]);
+                    $fullUrlPath = asset(Storage::url($picturePath));
+                    $product->update(['picture' => $fullUrlPath]);
                 }
                 return response()->json(['success' => true, 'message' => 'Product updated successfully'], 201);
             } else {

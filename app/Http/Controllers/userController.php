@@ -85,10 +85,11 @@ class userController extends Controller
                 $user->update($validated_data);
                 if ($request->hasFile('picture')) {
                     if ($user->picture) {
-                        Storage::delete($user->picture);
+                        Storage::delete($user->picture); 
                     }
                     $picturePath = $request->file('picture')->store('public/pictures');
-                    $user->update(['picture' => $picturePath]);
+                    $fullUrlPath = asset(Storage::url($picturePath));
+                    $user->update(['picture' => $fullUrlPath]);
                 }
                 return response()->json(['success' => true, 'message' => 'User updated successfully'], 201);
             } else {
@@ -134,7 +135,7 @@ class userController extends Controller
         try {
             $user = User::find($id); //find = user only no relation, where = condition relation
             $age = $this->calculateAge($user->birthday);
-            $record = [ //key
+            $record = [ //key อาจได้แยก controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'gender' => $user->gender,

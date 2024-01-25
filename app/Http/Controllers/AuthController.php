@@ -19,6 +19,7 @@ class AuthController extends Controller
       'name' => $request->name,
       'email' => $request->email,
       'password' => bcrypt($request->password),
+      'type' => User::DEFAULT_TYPE,
     ]);
 
     $token = auth()->login($user);
